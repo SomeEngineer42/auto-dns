@@ -1,0 +1,17 @@
+# Configuration for auto-dns with AWS credentials included
+
+# DNS Records to manage
+[[records]]
+name = "home.example.com"
+hosted_zone_id = "Z1234567890ABC"
+ttl = 300
+
+[[records]]
+name = "api.example.com"
+hosted_zone_id = "Z1234567890ABC"
+ttl = 600
+
+# AWS Configuration (optional - can use environment variables or IAM roles instead)
+[aws]
+access_key_id = "AKIAIOSFODNN7EXAMPLE"
+secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"

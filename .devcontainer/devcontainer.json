@@ -1,0 +1,53 @@
+{
+  "name": "Auto-DNS Rust Development",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  
+  "features": {
+    "ghcr.io/devcontainers/features/aws-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker",
+        "amazonwebservices.aws-toolkit-vscode"
+      ],
+      "settings": {
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "rust-analyzer.cargo.features": "all",
+        "editor.formatOnSave": true,
+        "[toml]": {
+          "editor.defaultFormatter": "tamasfe.even-better-toml"
+        },
+        "[yaml]": {
+          "editor.defaultFormatter": "redhat.vscode-yaml"
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "forwardPorts": [],
+
+  "initializeCommand": "bash .devcontainer/initialize.sh",
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "remoteUser": "SomeEngineer",
+
+  "mounts": [
+    "source=${localEnv:HOME}/.aws,target=/home/SomeEngineer/.aws,type=bind,consistency=cached"
+  ]
+}
