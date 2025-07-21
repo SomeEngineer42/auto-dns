@@ -3,13 +3,6 @@
 **/*.rs.bk
 *.pdb
 
-# Package build artifacts
-*.deb
-*.rpm
-/debian/
-/systemd/
-Cargo.toml.backup
-
 # IDE files
 .vscode/
 .idea/
@@ -25,12 +18,8 @@ Cargo.toml.backup
 ehthumbs.db
 Thumbs.db
 
-# Environment files
-.env
+# Config files
 config.toml
 
 # Logs
 *.log
-
-# Devcontainer
-.devcontainer/.env
