@@ -58,15 +58,44 @@ cargo build --release
 # The binary will be available at target/release/auto-dns
 ```
 
-### Option 2: Docker
+### Option 2: Nix Development Environment
+
+If you use Nix, you can get a complete development environment with all dependencies:
+
+#### Using Nix Flakes (Recommended)
 
 ```bash
-# Build the Docker image
-docker build -t auto-dns .
+# Clone the repository
+git clone https://github.com/SomeEngineer42/auto-dns.git
+cd auto-dns
 
-# Or use Docker Compose
-docker-compose up -d
+# Enter the development environment
+nix develop
+
+# Or with direnv (if you have it installed)
+direnv allow  # This will automatically activate the environment
 ```
+
+#### Using Traditional Nix
+
+```bash
+# Clone the repository
+git clone https://github.com/SomeEngineer42/auto-dns.git
+cd auto-dns
+
+# Enter the development shell
+nix-shell
+
+# Build and test
+cargo build --release
+cargo test
+```
+
+The Nix environment includes:
+- Rust 1.88.0 toolchain with clippy, rustfmt, and rust-analyzer
+- All required system dependencies (OpenSSL, pkg-config)
+- Development tools (cargo-watch, cargo-edit, cargo-audit)
+- Docker and Docker Compose for testing
 
 ## Configuration
 
@@ -136,22 +165,6 @@ Options:
 
 # Use custom config file
 ./auto-dns --config /path/to/config.yaml
-```
-
-### Docker Usage
-
-```bash
-# Run with Docker
-docker run -d \
-  --name auto-dns \
-  -v $(pwd)/config.yaml:/app/config.yaml:ro \
-  -e AWS_ACCESS_KEY_ID=your_key \
-  -e AWS_SECRET_ACCESS_KEY=your_secret \
-  -e AWS_DEFAULT_REGION=us-east-1 \
-  auto-dns
-
-# Or use Docker Compose
-docker-compose up -d
 ```
 
 ### Systemd Service (Linux)
@@ -231,6 +244,29 @@ cargo test -- --ignored
 # Run with coverage
 cargo tarpaulin --out html
 ```
+
+### Testing the Install Script
+
+The project includes comprehensive testing for the installation script:
+
+```bash
+# Run install script tests locally
+./scripts/test-install.sh
+
+# Skip Docker build test (faster, for syntax/validation only)
+./scripts/test-install.sh --skip-docker
+```
+
+The install script tests validate:
+- Script syntax and structure
+- Required variable definitions
+- Dockerfile generation and content
+- Systemd service file generation
+- Configuration file templates
+- Docker build process
+- Binary extraction and functionality
+
+The CI pipeline automatically runs these tests on every pull request to ensure the install script remains functional.
 
 ### Adding Dependencies
 

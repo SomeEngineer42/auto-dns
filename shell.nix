@@ -5,15 +5,15 @@
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    # Rust toolchain matching rust-toolchain.toml
-    (rust-bin.stable."1.75.0".default.override {
+    # Rust toolchain - latest stable version
+    (rust-bin.stable.latest.default.override {
       extensions = [ "rust-src" "clippy" "rustfmt" "rust-analyzer" ];
     })
-    
+
     # Build dependencies
     pkg-config
     openssl
-    
+
     # Development tools
     cargo-watch
     cargo-edit

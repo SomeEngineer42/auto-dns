@@ -18,6 +18,11 @@
 ehthumbs.db
 Thumbs.db
 
+# Nix
+result
+result-*
+.direnv/
+
 # Config files
 config.toml
 

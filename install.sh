@@ -99,36 +99,37 @@ print_status "Creating build environment..."
 
 # Create Dockerfile for building
 cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM rust:1.75-bookworm as builder
+# Multi-stage Docker build using Nix
+FROM nixos/nix:2.18.1 as builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Enable experimental features for Nix
+RUN echo "experimental-features = nix-command flakes" > /etc/nix/nix.conf
 
+# Install git for fetching repository
+RUN nix profile install nixpkgs#git
+
+# Create app directory
 WORKDIR /app
 
 # Clone the repository
 ARG GITHUB_REPO
 RUN git clone https://github.com/${GITHUB_REPO}.git .
 
-# Build the application
-RUN cargo build --release
+# Build using Nix (will use flake.nix configuration)
+RUN nix build
 
-# Create output directory and copy binary
-RUN mkdir -p /output && cp target/release/auto-dns /output/
+# Create output directory and copy binary from Nix result
+RUN mkdir -p /output && cp result/bin/auto-dns /output/
 EOF
 
-# Build the Docker image and extract binary
-print_status "Building auto-dns in Docker container..."
+# Build the auto-dns binary
+print_status "Building auto-dns in Docker container with Nix..."
 docker build \
-    --build-arg GITHUB_REPO="${GITHUB_REPO}" \
-    -t "${BUILD_IMAGE}" \
-    "${BUILD_DIR}" || {
-    print_error "Failed to build auto-dns"
-    exit 1
+	--build-arg GITHUB_REPO="${GITHUB_REPO}" \
+	-t "${BUILD_IMAGE}" \
+	"${BUILD_DIR}" || {
+	print_error "Failed to build auto-dns"
+	return 1
 }
 
 # Extract the binary from the container
@@ -136,6 +137,7 @@ print_status "Extracting built binary..."
 CONTAINER_ID=$(docker create "${BUILD_IMAGE}")
 docker cp "${CONTAINER_ID}:/output/auto-dns" "${BUILD_DIR}/auto-dns"
 docker rm "${CONTAINER_ID}" > /dev/null
+print_success "Built auto-dns in Docker with Nix"
 
 # Verify binary was created
 if [[ ! -f "${BUILD_DIR}/auto-dns" ]]; then
@@ -289,7 +291,6 @@ echo ""
 echo "Next steps:"
 echo -e "${BLUE}1.${NC} Test the configuration:"
 echo "   sudo -u ${SERVICE_USER} ${INSTALL_DIR}/auto-dns --config ${CONFIG_DIR}/config.yaml --once"
-echo -e "${BLUE}2.${NC} Start the service:"
 echo -e "${BLUE}2.${NC} Start the service:"
 echo "   sudo systemctl start auto-dns"
 echo -e "${BLUE}3.${NC} Check service status:"

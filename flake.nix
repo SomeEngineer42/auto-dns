@@ -14,9 +14,9 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        
-        # Use the same Rust version as specified in rust-toolchain.toml
-        rustToolchain = pkgs.rust-bin.stable."1.75.0".default.override {
+
+        # Use a recent stable Rust version that supports Cargo.lock version 4
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [ "rust-src" "clippy" "rustfmt" "rust-analyzer" ];
         };
 
@@ -42,12 +42,12 @@
           cargo-edit
           cargo-audit
           cargo-outdated
-          
+
           # General development tools
           git
           curl
           jq
-          
+
           # For running the install script
           docker
           docker-compose
@@ -58,10 +58,10 @@
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
           packages = devTools;
-          
+
           # Environment variables
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
-          
+
           # Shell hook to set up the environment
           shellHook = ''
             echo "🦀 Rust development environment for auto-dns"
@@ -82,9 +82,9 @@
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "auto-dns";
           version = "0.1.0";
-          
+
           src = ./.;
-          
+
           cargoLock = {
             lockFile = ./Cargo.lock;
           };
