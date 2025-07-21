@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use aws_config::{BehaviorVersion, Region};
-use aws_credential_types::{Credentials, provider::SharedCredentialsProvider};
+use aws_credential_types::{provider::SharedCredentialsProvider, Credentials};
 use aws_sdk_route53::types::{Change, ChangeAction, ResourceRecord, ResourceRecordSet, RrType};
 use aws_sdk_route53::Client;
 use std::net::Ipv4Addr;

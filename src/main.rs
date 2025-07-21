@@ -64,7 +64,10 @@ async fn run_update(
     for record in &config.records {
         info!("Checking DNS record: {}", record.name);
 
-        match dns_updater.get_current_record_ip(&record.hosted_zone_id, &record.name).await {
+        match dns_updater
+            .get_current_record_ip(&record.hosted_zone_id, &record.name)
+            .await
+        {
             Ok(dns_ip) => {
                 if dns_ip != current_ip {
                     info!(
@@ -73,7 +76,12 @@ async fn run_update(
                     );
 
                     dns_updater
-                        .update_record(&record.hosted_zone_id, &record.name, &current_ip, record.ttl)
+                        .update_record(
+                            &record.hosted_zone_id,
+                            &record.name,
+                            &current_ip,
+                            record.ttl,
+                        )
                         .await?;
 
                     info!("Successfully updated {} to {}", record.name, current_ip);
@@ -82,14 +90,28 @@ async fn run_update(
                 }
             }
             Err(e) => {
-                warn!("Could not get current DNS record for {}: {}", record.name, e);
-                info!("Creating new record for {} with IP {}", record.name, current_ip);
+                warn!(
+                    "Could not get current DNS record for {}: {}",
+                    record.name, e
+                );
+                info!(
+                    "Creating new record for {} with IP {}",
+                    record.name, current_ip
+                );
 
                 dns_updater
-                    .update_record(&record.hosted_zone_id, &record.name, &current_ip, record.ttl)
+                    .update_record(
+                        &record.hosted_zone_id,
+                        &record.name,
+                        &current_ip,
+                        record.ttl,
+                    )
                     .await?;
 
-                info!("Successfully created {} with IP {}", record.name, current_ip);
+                info!(
+                    "Successfully created {} with IP {}",
+                    record.name, current_ip
+                );
             }
         }
     }

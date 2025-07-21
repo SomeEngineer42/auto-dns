@@ -38,8 +38,8 @@ impl Config {
             .await
             .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
 
-        let config: Config = toml::from_str(&content)
-            .with_context(|| "Failed to parse config file as TOML")?;
+        let config: Config =
+            toml::from_str(&content).with_context(|| "Failed to parse config file as TOML")?;
 
         // Validate configuration
         if config.records.is_empty() {
@@ -89,8 +89,8 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_load_valid_config() {
@@ -134,7 +134,10 @@ secret_access_key = "test"
 
         let result = Config::load(temp_file.path()).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No DNS records configured"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No DNS records configured"));
     }
 
     #[tokio::test]
