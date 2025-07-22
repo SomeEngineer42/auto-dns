@@ -51,7 +51,7 @@ impl IpDetector {
             .get(url)
             .send()
             .await
-            .with_context(|| format!("Failed to make request to {}", url))?;
+            .with_context(|| format!("Failed to make request to {url}"))?;
 
         if !response.status().is_success() {
             anyhow::bail!("HTTP error {}: {}", response.status(), url);
@@ -60,11 +60,11 @@ impl IpDetector {
         let text = response
             .text()
             .await
-            .with_context(|| format!("Failed to read response from {}", url))?;
+            .with_context(|| format!("Failed to read response from {url}"))?;
 
         let ip_str = text.trim();
         let ip = Ipv4Addr::from_str(ip_str)
-            .with_context(|| format!("Invalid IP address '{}' from {}", ip_str, url))?;
+            .with_context(|| format!("Invalid IP address '{ip_str}' from {url}"))?;
 
         Ok(ip)
     }

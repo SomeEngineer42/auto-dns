@@ -48,7 +48,7 @@ impl DnsUpdater {
             .hosted_zone_id(hosted_zone_id)
             .send()
             .await
-            .with_context(|| format!("Failed to list records in zone {}", hosted_zone_id))?;
+            .with_context(|| format!("Failed to list records in zone {hosted_zone_id}"))?;
 
         for record_set in response.resource_record_sets() {
             let name = record_set.name();
@@ -62,7 +62,7 @@ impl DnsUpdater {
                     let value = first_record.value();
                     return value
                         .parse()
-                        .with_context(|| format!("Invalid IP in DNS record: {}", value));
+                        .with_context(|| format!("Invalid IP in DNS record: {value}"));
                 }
             }
         }
@@ -82,7 +82,7 @@ impl DnsUpdater {
         let record_name = if record_name.ends_with('.') {
             record_name.to_string()
         } else {
-            format!("{}.", record_name)
+            format!("{record_name}.")
         };
 
         let resource_record = ResourceRecord::builder()
@@ -119,8 +119,7 @@ impl DnsUpdater {
             .await
             .with_context(|| {
                 format!(
-                    "Failed to update DNS record {} in zone {}",
-                    record_name, hosted_zone_id
+                    "Failed to update DNS record {record_name} in zone {hosted_zone_id}"
                 )
             })?;
 

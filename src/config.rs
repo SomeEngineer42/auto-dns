@@ -34,9 +34,10 @@ fn default_ttl() -> i64 {
 
 impl Config {
     pub async fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = tokio::fs::read_to_string(path.as_ref())
+        let path_ref = path.as_ref();
+        let content = tokio::fs::read_to_string(path_ref)
             .await
-            .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
+            .with_context(|| format!("Failed to read config file: {}", path_ref.display()))?;
 
         let config: Config =
             toml::from_str(&content).with_context(|| "Failed to parse config file as TOML")?;
