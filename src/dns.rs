@@ -118,9 +118,7 @@ impl DnsUpdater {
             .send()
             .await
             .with_context(|| {
-                format!(
-                    "Failed to update DNS record {record_name} in zone {hosted_zone_id}"
-                )
+                format!("Failed to update DNS record {record_name} in zone {hosted_zone_id}")
             })?;
 
         if let Some(change_info) = response.change_info() {
