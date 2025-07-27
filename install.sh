@@ -99,14 +99,13 @@ print_status "Creating build environment..."
 
 # Create Dockerfile for building
 cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-# Multi-stage Docker build using Nix
-FROM nixos/nix:2.18.1 as builder
+FROM nixos/nix:2.18.1
 
 # Enable experimental features for Nix
 RUN echo "experimental-features = nix-command flakes" > /etc/nix/nix.conf
 
 # Install git for fetching repository
-RUN nix profile install nixpkgs#git
+RUN nix-shell -p git
 
 # Create app directory
 WORKDIR /app
