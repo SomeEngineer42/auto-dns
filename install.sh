@@ -97,46 +97,86 @@ trap "rm -rf ${BUILD_DIR}" EXIT
 
 print_status "Creating build environment..."
 
-# Create Dockerfile for building
-cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
-FROM nixos/nix:2.18.1
+# Try to download pre-built binary first
+LATEST_RELEASE_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+print_status "Checking for pre-built binary..."
 
-# Enable experimental features for Nix
-RUN echo "experimental-features = nix-command flakes" > /etc/nix/nix.conf
+if command -v curl &> /dev/null; then
+    DOWNLOAD_URL=$(curl -s "${LATEST_RELEASE_URL}" | grep -o "https://github.com/${GITHUB_REPO}/releases/download/[^\"]*auto-dns" | head -1)
+    if [[ -n "$DOWNLOAD_URL" ]]; then
+        print_status "Downloading pre-built binary..."
+        if curl -fsSL -o "${BUILD_DIR}/auto-dns" "${DOWNLOAD_URL}"; then
+            chmod +x "${BUILD_DIR}/auto-dns"
+            print_success "Downloaded pre-built binary"
+            BINARY_DOWNLOADED=true
+        else
+            print_warning "Failed to download pre-built binary, will build from source"
+            BINARY_DOWNLOADED=false
+        fi
+    else
+        print_warning "No pre-built binary found, will build from source"
+        BINARY_DOWNLOADED=false
+    fi
+else
+    print_warning "curl not available, will build from source"
+    BINARY_DOWNLOADED=false
+fi
 
-# Install git for fetching repository
-RUN nix-shell -p git
+# Build from source if download failed
+if [[ "${BINARY_DOWNLOADED}" != "true" ]]; then
+    print_status "Building from source using Rust..."
+
+    # Create optimized Dockerfile for Rust build
+    cat > "${BUILD_DIR}/Dockerfile" << 'EOF'
+# Use official Rust image for faster builds
+FROM rust:1-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
 
-# Clone the repository
+# Clone repository
 ARG GITHUB_REPO
-RUN git clone https://github.com/${GITHUB_REPO}.git .
+RUN git clone --depth 1 https://github.com/${GITHUB_REPO}.git .
 
-# Build using Nix (will use flake.nix configuration)
-RUN nix build
+# Build release binary
+RUN cargo build --release
 
-# Create output directory and copy binary from Nix result
-RUN mkdir -p /output && cp result/bin/auto-dns /output/
+# Create output directory and copy binary
+RUN mkdir -p /output && cp target/release/auto-dns /output/
 EOF
 
-# Build the auto-dns binary
-print_status "Building auto-dns in Docker container with Nix..."
-docker build \
-	--build-arg GITHUB_REPO="${GITHUB_REPO}" \
-	-t "${BUILD_IMAGE}" \
-	"${BUILD_DIR}" || {
-	print_error "Failed to build auto-dns"
-	return 1
-}
+    # Build the auto-dns binary
+    print_status "Building auto-dns in Docker container with Rust..."
+    docker build \
+        --build-arg GITHUB_REPO="${GITHUB_REPO}" \
+        -t "${BUILD_IMAGE}" \
+        "${BUILD_DIR}" || {
+        print_error "Failed to build auto-dns"
+        exit 1
+    }
+
+    # Extract the binary from the container
+    print_status "Extracting built binary..."
+    CONTAINER_ID=$(docker create "${BUILD_IMAGE}")
+    docker cp "${CONTAINER_ID}:/output/auto-dns" "${BUILD_DIR}/auto-dns"
+    docker rm "${CONTAINER_ID}" > /dev/null
+    print_success "Built auto-dns from source"
+fi
 
 # Extract the binary from the container
 print_status "Extracting built binary..."
 CONTAINER_ID=$(docker create "${BUILD_IMAGE}")
 docker cp "${CONTAINER_ID}:/output/auto-dns" "${BUILD_DIR}/auto-dns"
 docker rm "${CONTAINER_ID}" > /dev/null
-print_success "Built auto-dns in Docker with Nix"
+print_success "Built auto-dns from source"
+fi
 
 # Verify binary was created
 if [[ ! -f "${BUILD_DIR}/auto-dns" ]]; then
@@ -158,66 +198,15 @@ print_success "Binary installed to ${INSTALL_DIR}/auto-dns"
 print_status "Creating configuration directory..."
 $SUDO mkdir -p "${CONFIG_DIR}"
 
-# Interactive configuration
+# Interactive configuration using the binary's --write-config flag
 echo ""
 echo -e "${BLUE}📝 Configuration Setup${NC}"
-echo "Please provide the following information for your DNS configuration:"
+echo "Using auto-dns interactive configuration setup..."
 echo ""
 
-# Collect configuration information
-read -p "Domain name to update (e.g., home.example.com): " DOMAIN_NAME
-while [[ -z "$DOMAIN_NAME" ]]; do
-    print_warning "Domain name cannot be empty"
-    read -p "Domain name to update (e.g., home.example.com): " DOMAIN_NAME
-done
-
-read -p "AWS Route53 Hosted Zone ID (e.g., Z1234567890ABC): " HOSTED_ZONE_ID
-while [[ -z "$HOSTED_ZONE_ID" ]]; do
-    print_warning "Hosted Zone ID cannot be empty"
-    read -p "AWS Route53 Hosted Zone ID: " HOSTED_ZONE_ID
-done
-
-read -p "DNS record TTL in seconds [300]: " TTL
-TTL=${TTL:-300}
-
-# AWS Credentials
-echo ""
-echo -e "${YELLOW}⚙️  AWS Credentials Configuration${NC}"
-echo "Please provide your AWS credentials for Route53 access:"
-echo ""
-
-read -p "AWS Access Key ID: " AWS_ACCESS_KEY_ID
-while [[ -z "$AWS_ACCESS_KEY_ID" ]]; do
-    print_warning "AWS Access Key ID cannot be empty"
-    read -p "AWS Access Key ID: " AWS_ACCESS_KEY_ID
-done
-
-read -s -p "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
-echo ""
-while [[ -z "$AWS_SECRET_ACCESS_KEY" ]]; do
-    print_warning "AWS Secret Access Key cannot be empty"
-    read -s -p "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
-    echo ""
-done
-
-read -p "AWS Default Region [us-east-1]: " AWS_DEFAULT_REGION
-AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
-
-# Create configuration file
-print_status "Creating configuration file..."
-cat > "${BUILD_DIR}/config.yaml" << EOF
-records:
-  - name: "${DOMAIN_NAME}"
-    hosted_zone_id: "${HOSTED_ZONE_ID}"
-    ttl: ${TTL}
-
-aws:
-  access_key_id: "${AWS_ACCESS_KEY_ID}"
-  secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
-  region: "${AWS_DEFAULT_REGION}"
-EOF
-
-$SUDO cp "${BUILD_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
+print_status "Running interactive configuration setup..."
+CONFIG_FILE="${CONFIG_DIR}/config.toml"
+$SUDO "${INSTALL_DIR}/auto-dns" --write-config "${CONFIG_FILE}"
 
 # Create systemd service file
 print_status "Creating systemd service..."
@@ -234,7 +223,7 @@ Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${CONFIG_DIR}
-ExecStart=${INSTALL_DIR}/auto-dns --config ${CONFIG_DIR}/config.yaml
+ExecStart=${INSTALL_DIR}/auto-dns --config ${CONFIG_DIR}/config.toml
 Restart=always
 RestartSec=10
 
@@ -263,7 +252,7 @@ fi
 
 # Set configuration file ownership and secure permissions
 $SUDO chown -R "${SERVICE_USER}:${SERVICE_USER}" "${CONFIG_DIR}"
-$SUDO chmod 600 "${CONFIG_DIR}/config.yaml"  # Protect AWS credentials
+$SUDO chmod 600 "${CONFIG_FILE}"  # Protect AWS credentials
 
 $SUDO cp "${BUILD_DIR}/auto-dns.service" "${SYSTEMD_DIR}/auto-dns.service"
 
@@ -284,12 +273,12 @@ echo -e "${GREEN}🎉 Installation Complete!${NC}"
 echo ""
 echo "Auto-DNS has been installed and configured:"
 echo -e "  • Binary: ${GREEN}${INSTALL_DIR}/auto-dns${NC}"
-echo -e "  • Config: ${GREEN}${CONFIG_DIR}/config.yaml${NC}"
+echo -e "  • Config: ${GREEN}${CONFIG_DIR}/config.toml${NC}"
 echo -e "  • Service: ${GREEN}auto-dns.service${NC}"
 echo ""
 echo "Next steps:"
 echo -e "${BLUE}1.${NC} Test the configuration:"
-echo "   sudo -u ${SERVICE_USER} ${INSTALL_DIR}/auto-dns --config ${CONFIG_DIR}/config.yaml --once"
+echo "   sudo -u ${SERVICE_USER} ${INSTALL_DIR}/auto-dns --config ${CONFIG_DIR}/config.toml --once"
 echo -e "${BLUE}2.${NC} Start the service:"
 echo "   sudo systemctl start auto-dns"
 echo -e "${BLUE}3.${NC} Check service status:"

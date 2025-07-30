@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser;
+use std::io::{self, Write};
 use std::time::Duration;
 use tracing::{error, info, warn};
 
@@ -8,7 +9,7 @@ mod dns;
 mod ip;
 
 use config::Config;
-use dns::DnsUpdater;
+use dns::{DnsOperations, DnsUpdater, MockDnsUpdater};
 use ip::IpDetector;
 
 #[derive(Parser)]
@@ -22,11 +23,27 @@ struct Cli {
     /// Run once and exit (don't run continuously)
     #[arg(long)]
     once: bool,
+
+    /// Create a new configuration file at the specified path
+    #[arg(long)]
+    write_config: Option<String>,
+
+    /// Simulate AWS operations without making actual API calls (dry run mode)
+    #[arg(long)]
+    no_aws: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Validate that write-config is used alone
+    if let Some(config_path) = &cli.write_config {
+        if cli.once || cli.config != "config.toml" || cli.no_aws {
+            bail!("--write-config cannot be used with other flags");
+        }
+        return create_config_interactively(config_path).await;
+    }
 
     // Initialize logging
     tracing_subscriber::fmt()
@@ -41,20 +58,121 @@ async fn main() -> Result<()> {
 
     // Initialize components
     let ip_detector = IpDetector::new();
-    let dns_updater = DnsUpdater::new(&config.aws).await?;
 
-    if cli.once {
-        run_update(&ip_detector, &dns_updater, &config).await?;
+    if cli.no_aws {
+        info!("Running in dry-run mode (--no-aws). No actual AWS API calls will be made.");
+        let mock_dns_updater = MockDnsUpdater::new();
+
+        if cli.once {
+            run_update(&ip_detector, &mock_dns_updater, &config).await?;
+        } else {
+            run_continuous(&ip_detector, &mock_dns_updater, &config).await?;
+        }
     } else {
-        run_continuous(&ip_detector, &dns_updater, &config).await?;
+        let dns_updater = DnsUpdater::new(&config.aws).await?;
+
+        if cli.once {
+            run_update(&ip_detector, &dns_updater, &config).await?;
+        } else {
+            run_continuous(&ip_detector, &dns_updater, &config).await?;
+        }
     }
+
+    Ok(())
+}
+
+async fn create_config_interactively(config_path: &str) -> Result<()> {
+    println!("Creating new configuration file at: {}", config_path);
+    println!();
+
+    // Get AWS configuration
+    println!("AWS Configuration:");
+    print!("AWS Region (e.g., us-east-1): ");
+    io::stdout().flush()?;
+    let mut region = String::new();
+    io::stdin().read_line(&mut region)?;
+    let region = region.trim().to_string();
+
+    print!("AWS Access Key ID (optional, leave empty to use default credentials): ");
+    io::stdout().flush()?;
+    let mut access_key_id = String::new();
+    io::stdin().read_line(&mut access_key_id)?;
+    let access_key_id = access_key_id.trim();
+
+    print!("AWS Secret Access Key (optional, leave empty to use default credentials): ");
+    io::stdout().flush()?;
+    let mut secret_access_key = String::new();
+    io::stdin().read_line(&mut secret_access_key)?;
+    let secret_access_key = secret_access_key.trim();
+
+    println!();
+    println!("DNS Records Configuration:");
+    print!("How many DNS records do you want to configure? ");
+    io::stdout().flush()?;
+    let mut num_records = String::new();
+    io::stdin().read_line(&mut num_records)?;
+    let num_records: usize = num_records.trim().parse()?;
+
+    let mut records = Vec::new();
+    for i in 1..=num_records {
+        println!("\nRecord {}:", i);
+
+        print!("Hosted Zone ID: ");
+        io::stdout().flush()?;
+        let mut hosted_zone_id = String::new();
+        io::stdin().read_line(&mut hosted_zone_id)?;
+        let hosted_zone_id = hosted_zone_id.trim().to_string();
+
+        print!("Record name (e.g., home.example.com): ");
+        io::stdout().flush()?;
+        let mut name = String::new();
+        io::stdin().read_line(&mut name)?;
+        let name = name.trim().to_string();
+
+        print!("TTL in seconds (default 300): ");
+        io::stdout().flush()?;
+        let mut ttl = String::new();
+        io::stdin().read_line(&mut ttl)?;
+        let ttl = if ttl.trim().is_empty() {
+            300
+        } else {
+            ttl.trim().parse()?
+        };
+
+        records.push(format!(
+            r#"
+[[records]]
+hosted_zone_id = "{}"
+name = "{}"
+ttl = {}"#,
+            hosted_zone_id, name, ttl
+        ));
+    }
+
+    // Generate config content
+    let mut config_content = String::new();
+    config_content.push_str("[aws]\n");
+    config_content.push_str(&format!("region = \"{}\"\n", region));
+
+    if !access_key_id.is_empty() && !secret_access_key.is_empty() {
+        config_content.push_str(&format!("access_key_id = \"{}\"\n", access_key_id));
+        config_content.push_str(&format!("secret_access_key = \"{}\"\n", secret_access_key));
+    }
+
+    for record in records {
+        config_content.push_str(&record);
+    }
+
+    // Write config file
+    tokio::fs::write(config_path, config_content).await?;
+    println!("\nConfiguration file created successfully at: {}", config_path);
 
     Ok(())
 }
 
 async fn run_update(
     ip_detector: &IpDetector,
-    dns_updater: &DnsUpdater,
+    dns_updater: &dyn DnsOperations,
     config: &Config,
 ) -> Result<()> {
     info!("Checking current public IP");
@@ -121,7 +239,7 @@ async fn run_update(
 
 async fn run_continuous(
     ip_detector: &IpDetector,
-    dns_updater: &DnsUpdater,
+    dns_updater: &dyn DnsOperations,
     config: &Config,
 ) -> Result<()> {
     let mut interval = tokio::time::interval(Duration::from_secs(300)); // Fixed 5-minute interval

@@ -3,39 +3,36 @@ use aws_config::{BehaviorVersion, Region};
 use aws_credential_types::{provider::SharedCredentialsProvider, Credentials};
 use aws_sdk_route53::types::{Change, ChangeAction, ResourceRecord, ResourceRecordSet, RrType};
 use aws_sdk_route53::Client;
+use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use tracing::{debug, info};
 
 use crate::config::AwsConfig;
 
+#[async_trait::async_trait]
+pub trait DnsOperations {
+    async fn get_current_record_ip(
+        &self,
+        hosted_zone_id: &str,
+        record_name: &str,
+    ) -> Result<Ipv4Addr>;
+
+    async fn update_record(
+        &self,
+        hosted_zone_id: &str,
+        record_name: &str,
+        ip: &Ipv4Addr,
+        ttl: i64,
+    ) -> Result<()>;
+}
+
 pub struct DnsUpdater {
     client: Client,
 }
 
-impl DnsUpdater {
-    pub async fn new(aws_config: &AwsConfig) -> Result<Self> {
-        let credentials = Credentials::new(
-            &aws_config.access_key_id,
-            &aws_config.secret_access_key,
-            None,
-            None,
-            "auto-dns",
-        );
-
-        let region = Region::new(aws_config.region());
-
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .region(region)
-            .credentials_provider(SharedCredentialsProvider::new(credentials))
-            .load()
-            .await;
-
-        let client = Client::new(&config);
-
-        Ok(Self { client })
-    }
-
-    pub async fn get_current_record_ip(
+#[async_trait::async_trait]
+impl DnsOperations for DnsUpdater {
+    async fn get_current_record_ip(
         &self,
         hosted_zone_id: &str,
         record_name: &str,
@@ -70,7 +67,7 @@ impl DnsUpdater {
         anyhow::bail!("No A record found for {}", record_name)
     }
 
-    pub async fn update_record(
+    async fn update_record(
         &self,
         hosted_zone_id: &str,
         record_name: &str,
@@ -124,6 +121,76 @@ impl DnsUpdater {
         if let Some(change_info) = response.change_info() {
             debug!("Change submitted with ID: {:?}", change_info.id());
         }
+
+        Ok(())
+    }
+}
+
+impl DnsUpdater {
+    pub async fn new(aws_config: &AwsConfig) -> Result<Self> {
+        let credentials = Credentials::new(
+            &aws_config.access_key_id,
+            &aws_config.secret_access_key,
+            None,
+            None,
+            "auto-dns",
+        );
+
+        let region = Region::new(aws_config.region());
+
+        let config = aws_config::defaults(BehaviorVersion::latest())
+            .region(region)
+            .credentials_provider(SharedCredentialsProvider::new(credentials))
+            .load()
+            .await;
+
+        let client = Client::new(&config);
+
+        Ok(Self { client })
+    }
+}
+
+pub struct MockDnsUpdater {
+    // Unused field for now but could be used for more sophisticated simulation
+    #[allow(dead_code)]
+    simulated_records: HashMap<String, Ipv4Addr>,
+}
+
+impl MockDnsUpdater {
+    pub fn new() -> Self {
+        Self {
+            simulated_records: HashMap::new(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl DnsOperations for MockDnsUpdater {
+    async fn get_current_record_ip(
+        &self,
+        hosted_zone_id: &str,
+        record_name: &str,
+    ) -> Result<Ipv4Addr> {
+        info!("[DRY RUN] Getting current IP for record: {} in zone {}", record_name, hosted_zone_id);
+
+        // Simulate a different IP to trigger updates in dry run mode
+        let simulated_ip = "192.168.1.100".parse().unwrap();
+        info!("[DRY RUN] Simulated current DNS IP: {}", simulated_ip);
+
+        Ok(simulated_ip)
+    }
+
+    async fn update_record(
+        &self,
+        hosted_zone_id: &str,
+        record_name: &str,
+        ip: &Ipv4Addr,
+        ttl: i64,
+    ) -> Result<()> {
+        info!("[DRY RUN] Would update DNS record {} in zone {} to {} with TTL {}",
+              record_name, hosted_zone_id, ip, ttl);
+        info!("[DRY RUN] AWS Route53 API call would be made to change_resource_record_sets");
+        info!("[DRY RUN] Change would be: UPSERT A record {} -> {}", record_name, ip);
 
         Ok(())
     }
