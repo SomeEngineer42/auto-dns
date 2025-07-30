@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
 }
 
 async fn create_config_interactively(config_path: &str) -> Result<()> {
-    println!("Creating new configuration file at: {}", config_path);
+    println!("Creating new configuration file at: {config_path}");
     println!();
 
     // Get AWS configuration
@@ -115,7 +115,7 @@ async fn create_config_interactively(config_path: &str) -> Result<()> {
 
     let mut records = Vec::new();
     for i in 1..=num_records {
-        println!("\nRecord {}:", i);
+        println!("\nRecord {i}:");
 
         print!("Hosted Zone ID: ");
         io::stdout().flush()?;
@@ -142,21 +142,20 @@ async fn create_config_interactively(config_path: &str) -> Result<()> {
         records.push(format!(
             r#"
 [[records]]
-hosted_zone_id = "{}"
-name = "{}"
-ttl = {}"#,
-            hosted_zone_id, name, ttl
+hosted_zone_id = "{hosted_zone_id}"
+name = "{name}"
+ttl = {ttl}"#,
         ));
     }
 
     // Generate config content
     let mut config_content = String::new();
     config_content.push_str("[aws]\n");
-    config_content.push_str(&format!("region = \"{}\"\n", region));
+    config_content.push_str(&format!("region = \"{region}\"\n"));
 
     if !access_key_id.is_empty() && !secret_access_key.is_empty() {
-        config_content.push_str(&format!("access_key_id = \"{}\"\n", access_key_id));
-        config_content.push_str(&format!("secret_access_key = \"{}\"\n", secret_access_key));
+        config_content.push_str(&format!("access_key_id = \"{access_key_id}\"\n"));
+        config_content.push_str(&format!("secret_access_key = \"{secret_access_key}\"\n"));
     }
 
     for record in records {
@@ -166,8 +165,7 @@ ttl = {}"#,
     // Write config file
     tokio::fs::write(config_path, config_content).await?;
     println!(
-        "\nConfiguration file created successfully at: {}",
-        config_path
+        "\nConfiguration file created successfully at: {config_path}",
     );
 
     Ok(())
