@@ -165,7 +165,10 @@ ttl = {}"#,
 
     // Write config file
     tokio::fs::write(config_path, config_content).await?;
-    println!("\nConfiguration file created successfully at: {}", config_path);
+    println!(
+        "\nConfiguration file created successfully at: {}",
+        config_path
+    );
 
     Ok(())
 }

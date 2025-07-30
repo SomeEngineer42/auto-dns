@@ -171,7 +171,10 @@ impl DnsOperations for MockDnsUpdater {
         hosted_zone_id: &str,
         record_name: &str,
     ) -> Result<Ipv4Addr> {
-        info!("[DRY RUN] Getting current IP for record: {} in zone {}", record_name, hosted_zone_id);
+        info!(
+            "[DRY RUN] Getting current IP for record: {} in zone {}",
+            record_name, hosted_zone_id
+        );
 
         // Simulate a different IP to trigger updates in dry run mode
         let simulated_ip = "192.168.1.100".parse().unwrap();
@@ -187,10 +190,15 @@ impl DnsOperations for MockDnsUpdater {
         ip: &Ipv4Addr,
         ttl: i64,
     ) -> Result<()> {
-        info!("[DRY RUN] Would update DNS record {} in zone {} to {} with TTL {}",
-              record_name, hosted_zone_id, ip, ttl);
+        info!(
+            "[DRY RUN] Would update DNS record {} in zone {} to {} with TTL {}",
+            record_name, hosted_zone_id, ip, ttl
+        );
         info!("[DRY RUN] AWS Route53 API call would be made to change_resource_record_sets");
-        info!("[DRY RUN] Change would be: UPSERT A record {} -> {}", record_name, ip);
+        info!(
+            "[DRY RUN] Change would be: UPSERT A record {} -> {}",
+            record_name, ip
+        );
 
         Ok(())
     }
